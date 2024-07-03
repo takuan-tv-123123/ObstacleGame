@@ -72,6 +72,14 @@ const abilities = [
         duration: 30,
         multiplier: 0.2,
         action: () => activateSlowdownMode()
+    },
+    {
+        id: "gunmode",
+        name: "銃モード",
+        description: "10発銃を上に発射することができる。",
+        duration: 30,
+        shots: 10,
+        action: () => activateGunMode()
     }
 ];
 
@@ -100,6 +108,8 @@ let currentLevel = 1; // 現在のレベル
 let abilityActive = false;
 let abilityUsed = false;
 let abilityEndTime = 0;
+
+let remainingShots = abilities[2].shots;
 
 let selectedAbility = abilities[0];
 
@@ -175,6 +185,12 @@ function drawCurrentLevel() {
     ctx.fillText(`レベル: ${obstacleFrequency <= minObstacleFrequency ? "MAX" : currentLevel}`, 10, 60);
 }
 
+function drawRemainingShots() {
+    ctx.fillStyle = "black";
+    ctx.font = "20px Arial";
+    ctx.fillText(`残り弾数: ${remainingShots}`, 650, 30);
+}
+
 function drawInvincibleCircle() {
     const radius = 100;
     ctx.beginPath();
@@ -192,6 +208,38 @@ function drawMenu() {
     ctx.font = '20px Arial';
     ctx.fillText('Press Enter to Start', canvas.width / 2 - 100, canvas.height / 2 + 20);
 }
+
+function Shot() {
+    if (selectedAbility.id === "gunmode" && remainingShots > 0 && !abilityUsed) {
+        // 弾を発射する処理
+        const bulletSpeed = 8;
+        const bulletRadius = 3;
+        const bulletX = player.x + player.width / 2;
+        const bulletY = player.y;
+        
+        obstacles.push({
+            name: 'bulletObstacle',
+            color: 'black',
+            speed: bulletSpeed,
+            radius: bulletRadius,
+            x: bulletX,
+            y: bulletY,
+            dx: 0,
+            dy: -bulletSpeed // 上方向に移動
+        });
+
+        remainingShots--;
+        addStatusMessage(`弾発射！ 残り弾数: ${remainingShots}`);
+        
+        // 銃モードが終了したかどうかを確認
+        if (remainingShots === 0) {
+            abilityActive = false;
+            abilityUsed = true; // 銃モードが完全に使用されたことを示すフラグ
+            addStatusMessage("銃モード終了。");
+        }
+    }
+}
+
 
 function movePlayer() {
     player.x += player.dx;
@@ -414,6 +462,7 @@ function draw() {
         drawElapsedTime();
         drawCurrentLevel(); // 現在のレベルを描画
         drawStatusMessages();
+        drawRemainingShots();
     }
 }
 
@@ -448,6 +497,8 @@ function keyDown(e) {
             document.body.innerHTML = '';
             document.title = "ClassRoom"
             window.location.href = "https://classroom.google.com/h";
+        } else if (e.key === "a" || e.key === "A") {
+            Shot();
         }
     }
 }
@@ -489,6 +540,12 @@ function activateSlowdownMode() {
     });
 
     addStatusMessage("スローダウン ON!")
+}
+
+function activateGunMode()
+{
+    abilityActive = true;
+    abilityUsed = true;
 }
 
 function removeSurroundingObstacles() {
