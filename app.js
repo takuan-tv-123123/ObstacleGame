@@ -4,6 +4,9 @@ const ctx = canvas.getContext('2d');
 canvas.width = 800;
 canvas.height = 600;
 
+const DEFAULT_MULTIPLIER = 1;
+let obstacleSpeedMultiplier = DEFAULT_MULTIPLIER;
+
 const player = {
     x: canvas.width / 2,
     y: canvas.height - 30,
@@ -19,35 +22,35 @@ const obstacles = [
     {
         name: 'normalObstacle',
         color: 'red',
-        speed: 3,
+        speed: 3 * obstacleSpeedMultiplier,
         size: 50,
         probability: 0.3 // 30%の確率で生成される
     },
     {
         name: 'fastObstacle',
         color: 'green',
-        speed: 7,
+        speed: 7 * obstacleSpeedMultiplier,
         size: 30,
         probability: 0.2 // 20%の確率で生成される
     },
     {
         name: 'slowObstacle',
         color: 'gray',
-        speed: 1,
+        speed: 1 * obstacleSpeedMultiplier,
         size: 80,
         probability: 0.2 // 20%の確率で生成される
     },
     {
         name: 'bulletObstacle',
         color: 'black',
-        speed: 15,
+        speed: 15 * obstacleSpeedMultiplier,
         radius: 3,
         probability: 0.2 // 20%の確率で生成される
     },
     {
         name: 'trackingEnemy',
         color: 'purple',
-        speed: 1.5,
+        speed: 1.5 * obstacleSpeedMultiplier,
         size: 40,
         probability: 0.1, // 10%の確率で生成される
         duration: 5000 // 10秒間存在する
@@ -56,15 +59,36 @@ const obstacles = [
 
 const abilities = [
     {
-        name: "invincible",
+        id: "invincible",
+        name: "無敵",
         description: "10秒間周囲の障害物を消すことができる。",
         duration: 10,
         action: () => activateInvincibleMode()
+    },
+    {
+        id: "slowdown",
+        name: "スローダウン",
+        description: "30秒間障害物のスピードを遅くすることができる。",
+        duration: 30,
+        multiplier: 0.2,
+        action: () => activateSlowdownMode()
     }
 ];
 
+/* Ability Template
+
+{
+    id: "ENTER THE ID",
+    name: "ENTER THE JAPANESE NAME",
+    description: "ENTER THE DESCRIPTION",
+    duration: DURATION,
+    action: () => DO_THIS_FUNCTION()
+}
+
+*/
+
 let minObstacleFrequency = 10;
-let obstacleFrequency = 30; // フレームごと
+let obstacleFrequency = 100; // フレームごと
 
 let interval = 10000;
 
@@ -73,20 +97,54 @@ let startTime = Date.now(); // ゲーム開始時刻
 let levelUpTime = Date.now(); // レベルアップタイマー
 let currentLevel = 1; // 現在のレベル
 
-let invincibleActive = false;
-let invincibleUsed = false;
-let invincibleEndTime = 0;
+let abilityActive = false;
+let abilityUsed = false;
+let abilityEndTime = 0;
 
 let selectedAbility = abilities[0];
 
 let gameState = 'menu'; // ゲームの状態 ('menu' または 'playing')
 
+const statusMessages = []; // ステータスメッセージの配列
+
+function drawStatusMessages() {
+    const lineHeight = 20; // メッセージごとの行間隔
+    const margin = 10; // canvasの端からのマージン
+
+    ctx.fillStyle = 'black';
+    ctx.font = '16px Arial';
+
+    // メッセージを上から順に描画
+    for (let i = 0; i < statusMessages.length; i++) {
+        const message = statusMessages[i].message;
+        const y = canvas.height - margin - (statusMessages.length - i) * lineHeight;
+
+        ctx.fillText(message, margin, y);
+    }
+}
+
+function addStatusMessage(message) {
+    // 新しいメッセージを配列の先頭に追加
+    statusMessages.unshift({ message });
+
+    // 5秒後にメッセージを削除するタイマーを設定
+    setTimeout(() => {
+        statusMessages.pop(); // 配列の末尾のメッセージを削除
+    }, 5000);
+}
+
 function drawPlayer() {
     ctx.fillStyle = player.color;
     ctx.fillRect(player.x, player.y, player.width, player.height);
-
-    if (invincibleActive) {
-        drawInvincibleCircle();
+    if (abilityActive) {
+        switch(selectedAbility.id)
+        {
+            case "invincible":
+                drawInvincibleCircle();
+                break;
+            case "slowdown":
+                break;
+        }   
     }
 }
 
@@ -195,11 +253,12 @@ function createObstacle() {
 
         if (randomNumber <= cumulativeProbability) {
             const obstacleType = obstacles[i];
+            console.log(obstacleType)
             let x, y, dx, dy;
 
             if (obstacleType.radius) {
                 const radius = obstacleType.radius;
-                const speed = obstacleType.speed;
+                const speed = obstacleType.speed * obstacleSpeedMultiplier;
                 const direction = Math.random() * Math.PI * 2; // ランダムな方向
 
                 // 軌道に沿って一定の遅延を持って生成
@@ -210,10 +269,11 @@ function createObstacle() {
                     dy = -Math.sin(direction) * speed;
 
                     obstacles.push({ ...obstacleType, x, y, dx, dy });
+                    
                 }, 3000); // 3秒後に生成
             } else {
                 const size = obstacleType.size;
-                const speed = obstacleType.speed;
+                const speed = obstacleType.speed * obstacleSpeedMultiplier;
                 const direction = Math.floor(Math.random() * 4); // 0: 上, 1: 右, 2: 下, 3: 左
 
                 switch (direction) {
@@ -283,6 +343,33 @@ function detectCollision() {
     });
 }
 
+function AbilityUpdate()
+{
+    switch(selectedAbility.id)
+    {
+        case "invincible":
+            removeSurroundingObstacles();
+            break;
+        case "slowdown":
+            console.log(obstacleSpeedMultiplier)
+            break;
+    }
+}
+
+function OnAbilityEnd()
+{
+    switch (selectedAbility.id)
+    {
+        case "invincible":
+            addStatusMessage("無敵モードが無効になりました。");
+            break;
+        case "slowdown":
+            addStatusMessage("スローダウンが無効になりました。");
+            obstacleSpeedMultiplier = DEFAULT_MULTIPLIER;
+            break;
+    }
+}
+
 function update() {
     movePlayer();
     moveObstacles();
@@ -294,11 +381,13 @@ function update() {
     }
 
     // 無敵モードがアクティブな場合、周囲の障害物を削除
-    if (invincibleActive) {
-        removeSurroundingObstacles();
-        if (Date.now() >= invincibleEndTime) {
-            invincibleActive = false; // 10秒後に無敵モードを終了
+    if (abilityActive) {
+        if (Date.now() >= abilityEndTime) {
+            abilityActive = false;
+            OnAbilityEnd()
         }
+
+        AbilityUpdate()
     }
 
     frameCount++;
@@ -324,6 +413,7 @@ function draw() {
         drawObstacles();
         drawElapsedTime();
         drawCurrentLevel(); // 現在のレベルを描画
+        drawStatusMessages();
     }
 }
 
@@ -340,6 +430,7 @@ function keyDown(e) {
         if (e.key === 'Enter') {
             gameState = 'playing';
             startTime = Date.now(); // ゲーム開始時刻をリセット
+            document.getElementById('ability_selector').disabled = true;
         }
     } else if (gameState === 'playing') {
         if (e.key === 'ArrowRight' || e.key === 'Right') {
@@ -350,8 +441,13 @@ function keyDown(e) {
             player.dy = -player.speed;
         } else if (e.key === 'ArrowDown' || e.key === 'Down') {
             player.dy = player.speed;
-        } else if ((e.key === 'u' || e.key === 'U') && !invincibleUsed) {
+        } else if ((e.key === 'u' || e.key === 'U') && !abilityUsed) {
             selectedAbility.action();
+        } else if (e.key === 'x' || e.key === "X") {
+            console.log("緊急回避！")
+            document.body.innerHTML = '';
+            document.title = "ClassRoom"
+            window.location.href = "https://classroom.google.com/h";
         }
     }
 }
@@ -375,9 +471,24 @@ function keyUp(e) {
 }
 
 function activateInvincibleMode() {
-    invincibleActive = true;
-    invincibleUsed = true;
-    invincibleEndTime = Date.now() + 10000; // 10秒間の無敵
+    abilityActive = true;
+    abilityUsed = true;
+    abilityEndTime = Date.now() + abilities[0].duration * 1000; // 10秒間の無敵
+
+    addStatusMessage("無敵モード ON!")
+}
+
+function activateSlowdownMode() {
+    abilityActive = true;
+    abilityUsed = true;
+    obstacleSpeedMultiplier = abilities[1].multiplier;
+    abilityEndTime = Date.now() + abilities[1].duration * 1000; // 30秒間の無敵
+
+    obstacles.forEach(obstacle => function() {
+        obstacle.speed *= obstacleSpeedMultiplier;
+    });
+
+    addStatusMessage("スローダウン ON!")
 }
 
 function removeSurroundingObstacles() {
@@ -402,5 +513,31 @@ function removeSurroundingObstacles() {
 
 document.addEventListener('keydown', keyDown);
 document.addEventListener('keyup', keyUp);
+
+// ページロード時に実行する関数
+function populateAbilityOptions() {
+    const abilitySelector = document.getElementById('ability_selector');
+    const descriptionLabel = document.getElementById('description');
+
+    abilities.forEach(ability => {
+        const option = document.createElement('option');
+        option.value = ability.name;
+        option.text = ability.name;
+        abilitySelector.appendChild(option);
+    });
+
+    // 初期選択肢の説明を設定
+    descriptionLabel.innerHTML = abilities[0].description;
+
+    // 選択変更時に説明を更新
+    abilitySelector.addEventListener('change', () => {
+        const changedAbility = abilities.find(ability => ability.name === abilitySelector.value);
+        descriptionLabel.innerHTML = changedAbility.description;
+        selectedAbility = changedAbility;
+    });
+}
+
+// ページロード時に関数を呼び出し
+window.onload = populateAbilityOptions;
 
 loop();
