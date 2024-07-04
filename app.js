@@ -77,8 +77,8 @@ const abilities = [
         id: "gunmode",
         name: "銃モード",
         description: "10発銃を上に発射することができる。",
-        duration: 30,
         shots: 10,
+        canUse: false,
         action: () => activateGunMode()
     }
 ];
@@ -191,6 +191,15 @@ function drawRemainingShots() {
     ctx.fillText(`残り弾数: ${remainingShots}`, 650, 30);
 }
 
+function drawBullets() {
+    ctx.fillStyle = 'gray';
+    bullets.forEach(bullet => {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
 function drawInvincibleCircle() {
     const radius = 100;
     ctx.beginPath();
@@ -209,37 +218,68 @@ function drawMenu() {
     ctx.fillText('Press Enter to Start', canvas.width / 2 - 100, canvas.height / 2 + 20);
 }
 
+const bullets = [];
+
 function Shot() {
-    if (selectedAbility.id === "gunmode" && remainingShots > 0 && !abilityUsed) {
+    if (selectedAbility.id === "gunmode" && remainingShots > 0 && !abilityUsed && abilities[2].canUse) {
         // 弾を発射する処理
         const bulletSpeed = 8;
         const bulletRadius = 3;
         const bulletX = player.x + player.width / 2;
         const bulletY = player.y;
-        
-        obstacles.push({
-            name: 'bulletObstacle',
-            color: 'black',
+
+        const bullet = {
+            name: 'bullet',
+            color: 'gray',
             speed: bulletSpeed,
             radius: bulletRadius,
             x: bulletX,
             y: bulletY,
             dx: 0,
             dy: -bulletSpeed // 上方向に移動
-        });
+        };
 
+        bullets.push(bullet);
         remainingShots--;
         addStatusMessage(`弾発射！ 残り弾数: ${remainingShots}`);
         
         // 銃モードが終了したかどうかを確認
         if (remainingShots === 0) {
             abilityActive = false;
-            abilityUsed = true; // 銃モードが完全に使用されたことを示すフラグ
+            abilityUsed = true;
+            abilities[2].canUse = false;
             addStatusMessage("銃モード終了。");
         }
     }
 }
 
+function moveBullets() {
+    bullets.forEach(bullet => {
+        bullet.y += bullet.dy;
+        // 画面外の弾を削除
+        if (bullet.y + bullet.radius < 0) {
+            const index = bullets.indexOf(bullet);
+            if (index > -1) bullets.splice(index, 1);
+        }
+    });
+}
+
+function detectBulletCollision() {
+    bullets.forEach((bullet, bulletIndex) => {
+        obstacles.forEach((obstacle, obstacleIndex) => {
+            const dx = bullet.x - obstacle.x;
+            const dy = bullet.y - obstacle.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < bullet.radius + (obstacle.radius || obstacle.size / 2)) {
+                // 障害物と弾が衝突
+                bullets.splice(bulletIndex, 1); // 弾を削除
+                obstacles.splice(obstacleIndex, 1); // 障害物を削除
+                addStatusMessage(`障害物を破壊！`);
+            }
+        });
+    });
+}
 
 function movePlayer() {
     player.x += player.dx;
@@ -422,6 +462,8 @@ function update() {
     movePlayer();
     moveObstacles();
     detectCollision();
+    moveBullets();
+    detectBulletCollision();
 
     // 新しい障害物を生成
     if (frameCount % obstacleFrequency === 0) {
@@ -462,7 +504,17 @@ function draw() {
         drawElapsedTime();
         drawCurrentLevel(); // 現在のレベルを描画
         drawStatusMessages();
-        drawRemainingShots();
+        drawBullets();
+
+        switch (selectedAbility.id)
+        {
+            case "gunmode":
+                if (selectedAbility.canUse)
+                {
+                    drawRemainingShots();
+                }
+                break;
+        }
     }
 }
 
@@ -479,7 +531,8 @@ function keyDown(e) {
         if (e.key === 'Enter') {
             gameState = 'playing';
             startTime = Date.now(); // ゲーム開始時刻をリセット
-            document.getElementById('ability_selector').disabled = true;
+            document.getElementById('ability_selector').remove();
+            document.getElementById("description").remove();
         }
     } else if (gameState === 'playing') {
         if (e.key === 'ArrowRight' || e.key === 'Right') {
@@ -545,7 +598,9 @@ function activateSlowdownMode() {
 function activateGunMode()
 {
     abilityActive = true;
-    abilityUsed = true;
+    abilities[2].canUse = true;
+
+    addStatusMessage("銃モードがONになりました。");
 }
 
 function removeSurroundingObstacles() {
